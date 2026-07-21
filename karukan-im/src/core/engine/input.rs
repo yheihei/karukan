@@ -251,7 +251,9 @@ impl InputMethodEngine {
                 // Ctrl+Space: insert full-width space (U+3000)
                 Keysym::SPACE => return self.input_fullwidth_space(),
                 // Ctrl+K: enter katakana mode
-                Keysym::KEY_K | Keysym::KEY_K_UPPER => return self.enter_katakana_mode(),
+                Keysym::KEY_K | Keysym::KEY_K_UPPER if !key.modifiers.shift_key => {
+                    return self.enter_katakana_mode();
+                }
                 // Ctrl+A: move to beginning (Emacs-style Home)
                 Keysym::KEY_A | Keysym::KEY_A_UPPER => return self.move_caret_home(),
                 // Ctrl+B: move left (Emacs-style Left)

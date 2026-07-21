@@ -7,6 +7,10 @@ use crate::core::keycode::Keysym;
 // XKB keysyms for common keys (u32 aliases for the JSON payloads below)
 const XKB_KEY_K: u32 = Keysym::KEY_K.0;
 const XKB_KEY_A: u32 = Keysym::KEY_A.0;
+const XKB_KEY_J: u32 = 0x006a;
+const XKB_KEY_C: u32 = 0x0063;
+const XKB_KEY_I: u32 = 0x0069;
+const XKB_KEY_U: u32 = 0x0075;
 const XKB_KEY_LOWER_L: u32 = Keysym::KEY_L.0;
 const XKB_KEY_RETURN: u32 = Keysym::RETURN.0;
 const XKB_KEY_ESCAPE: u32 = Keysym::ESCAPE.0;
@@ -37,6 +41,18 @@ fn press(server: &mut ImServer, keysym: u32) -> Value {
     request(
         server,
         json!({"jsonrpc":"2.0","id":1,"method":"process_key","params":{"keysym": keysym}}),
+    )
+}
+
+fn press_with_modifiers(server: &mut ImServer, keysym: u32, modifiers: Value) -> Value {
+    request(
+        server,
+        json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"process_key",
+            "params":{"keysym":keysym, "modifiers":modifiers}
+        }),
     )
 }
 
@@ -128,6 +144,112 @@ fn test_escape_cancels_composition() {
     // Escape itself in Empty state passes through.
     let resp = press(&mut server, XKB_KEY_ESCAPE);
     assert_eq!(resp["result"]["consumed"], false);
+}
+
+#[test]
+fn default_control_k_transforms_only_current_preedit() {
+    let mut server = test_server();
+    press(&mut server, XKB_KEY_A);
+    press(&mut server, XKB_KEY_I);
+
+    let resp = press_with_modifiers(&mut server, XKB_KEY_K, json!({"control":true}));
+    assert_eq!(resp["result"]["consumed"], true);
+    assert_eq!(
+        actions_of(&resp, "update_preedit").last().unwrap()["text"],
+        "アイ"
+    );
+
+    let resp = press(&mut server, XKB_KEY_U);
+    assert_eq!(
+        actions_of(&resp, "update_preedit").last().unwrap()["text"],
+        "アイう"
+    );
+}
+
+#[test]
+fn default_control_j_transforms_katakana_to_hiragana() {
+    let mut server = test_server();
+    press(&mut server, XKB_KEY_A);
+    press(&mut server, XKB_KEY_I);
+    press_with_modifiers(&mut server, XKB_KEY_K, json!({"control":true}));
+
+    let resp = press_with_modifiers(&mut server, XKB_KEY_J, json!({"control":true}));
+
+    assert_eq!(resp["result"]["consumed"], true);
+    assert_eq!(
+        actions_of(&resp, "update_preedit").last().unwrap()["text"],
+        "あい"
+    );
+}
+
+#[test]
+fn control_binding_passes_through_when_preedit_is_empty() {
+    let mut server = test_server();
+
+    let resp = press_with_modifiers(&mut server, XKB_KEY_K, json!({"control":true}));
+
+    assert_eq!(resp["result"]["consumed"], false);
+    assert!(resp["result"]["actions"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn unmatched_command_shortcut_does_not_mutate_composition() {
+    let mut server = test_server();
+    press(&mut server, XKB_KEY_A);
+    press(&mut server, XKB_KEY_I);
+
+    let resp = press_with_modifiers(&mut server, XKB_KEY_C, json!({"super":true}));
+    assert_eq!(resp["result"]["consumed"], false);
+    assert!(resp["result"]["actions"].as_array().unwrap().is_empty());
+
+    let resp = press(&mut server, XKB_KEY_U);
+    assert_eq!(
+        actions_of(&resp, "update_preedit").last().unwrap()["text"],
+        "あいう"
+    );
+}
+
+#[test]
+fn custom_and_disabled_bindings_are_applied() {
+    let mut settings = Settings::default();
+    settings.conversion.live_conversion = false;
+    settings.keybindings.to_hiragana = "none".to_string();
+    settings.keybindings.to_katakana = "control+shift+k".to_string();
+    let mut server = ImServer::with_settings(settings);
+    press(&mut server, XKB_KEY_A);
+    press(&mut server, XKB_KEY_I);
+
+    let control_k = press_with_modifiers(&mut server, XKB_KEY_K, json!({"control":true}));
+    assert_eq!(control_k["result"]["consumed"], true);
+
+    let custom = press_with_modifiers(
+        &mut server,
+        Keysym::KEY_K_UPPER.0,
+        json!({"control":true, "shift":true}),
+    );
+    assert_eq!(custom["result"]["consumed"], true);
+    assert_eq!(
+        actions_of(&custom, "update_preedit").last().unwrap()["text"],
+        "アイ"
+    );
+
+    let disabled = press_with_modifiers(&mut server, XKB_KEY_J, json!({"control":true}));
+    assert_eq!(disabled["result"]["consumed"], false);
+}
+
+#[test]
+fn binding_requires_exact_modifiers() {
+    let mut server = test_server();
+    press(&mut server, XKB_KEY_A);
+
+    let resp = press_with_modifiers(
+        &mut server,
+        Keysym::KEY_K_UPPER.0,
+        json!({"control":true, "shift":true}),
+    );
+
+    assert_eq!(resp["result"]["consumed"], false);
+    assert!(resp["result"]["actions"].as_array().unwrap().is_empty());
 }
 
 #[test]

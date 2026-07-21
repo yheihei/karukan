@@ -38,3 +38,10 @@ enabled = true
 max_entries = 10000
 # 学習する変換結果の最大文字数
 max_surface_chars = 50
+
+[keybindings]
+# macOS版で現在の未確定文字を全角ひらがな・カタカナへ変換する。
+# command/cmd, control/ctrl, option/alt, shift と単一キーを + でつなぐ。
+# 個別に無効化する場合は "none" を指定する。変更後はKarukanIMEの再起動が必要。
+to_hiragana = "control+j"
+to_katakana = "control+k"

@@ -104,6 +104,8 @@ fcitx5版と同じキーバインドに加えて:
 | かな (JIS) | ひらがな入力モードへ戻る。Ctrl+K のカタカナモード、Shift+英字で入った英数字モードのどちらからでも有効(Linux版の右Super/変換キーに相当) |
 | 英数 (JIS) | 変換中テキストを確定して直接入力モードへ切替 |
 | 右⌘ 単独タップ | かなキーと同じ(ひらがな入力モードへ戻る)。JISかなキーが無いUS配列向けの代替で、Karabinerなどの設定は不要。⌘C など他のキーと組み合わせた場合や、他の修飾キーと同時押しした場合は発動しない |
+| Control+J | 現在の未確定文字を全角ひらがなへ変換 |
+| Control+K | 現在の未確定文字を全角カタカナへ変換 |
 
 ## 設定・データファイル
 
@@ -113,6 +115,19 @@ fcitx5版と同じキーバインドに加えて:
 - システム辞書: `~/Library/Application Support/com.karukan.karukan-im/dict.bin`
 - ユーザー辞書: `~/Library/Application Support/com.karukan.karukan-im/user_dicts/`
 - 学習データ: `~/Library/Application Support/com.karukan.karukan-im/learning.tsv`
+
+字種変換のキーは`config.toml`で変更できます。`command`/`cmd`、
+`control`/`ctrl`、`option`/`alt`、`shift`と単一キーを`+`でつなぎます。
+通常入力との衝突を避けるため、Command、Control、Optionのいずれかが必要です。
+
+```toml
+[keybindings]
+to_hiragana = "control+j"
+to_katakana = "control+k"
+```
+
+個別に無効化する場合は`"none"`を指定します。設定変更後は
+`killall KarukanIME`でKarukanIMEを再起動してください。
 
 ## デバッグ
 
