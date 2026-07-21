@@ -90,6 +90,13 @@ final class KeyCodeMapTests: XCTestCase {
         XCTAssertEqual(event?.modifiers.shift, true)
     }
 
+    func testCommandModifier() {
+        let event = KeyCodeMap.translate(
+            keyCode: 38, characters: "j", charactersIgnoringModifiers: "j", flags: [.command])
+        XCTAssertEqual(event?.keysym, 0x6a)
+        XCTAssertEqual(event?.modifiers.superKey, true)
+    }
+
     func testNonAsciiNotTranslated() {
         // Kana input layouts produce non-ASCII characters; unsupported.
         XCTAssertNil(

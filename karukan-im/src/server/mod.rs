@@ -4,16 +4,20 @@
 //! process spawned by the macOS (Swift/InputMethodKit) frontend. See
 //! [`protocol`] for the wire format.
 
+mod keybinding;
 pub mod protocol;
 
 use serde_json::{Value, json};
 
 use crate::config::Settings;
 use crate::core::candidate::CandidateList;
-use crate::core::engine::{EngineAction, EngineConfig, EngineResult, InputMethodEngine};
+use crate::core::engine::{
+    EngineAction, EngineConfig, EngineResult, InputMethodEngine, KanaScript,
+};
 use crate::core::keycode::{KeyEvent, Keysym};
 use crate::core::state::InputState;
 
+use keybinding::{MacKeyBindings, SemanticAction};
 use protocol::{
     Action, CandidateItem, InitResult, KeyResult, PROTOCOL_VERSION, PreeditAttr, ProcessKeyParams,
     Request, Response, RpcError, SelectCandidateParams, StatusResult, SurroundingTextParams,
@@ -25,6 +29,7 @@ use protocol::{
 /// (Empty → Composing → Conversion) lives here across requests.
 pub struct ImServer {
     engine: InputMethodEngine,
+    keybindings: MacKeyBindings,
     /// Pending settings, consumed by the first successful `init`.
     settings: Option<Settings>,
     initialized: bool,
@@ -45,8 +50,10 @@ impl ImServer {
 
     pub fn with_settings(settings: Settings) -> Self {
         let config = EngineConfig::from_settings(&settings);
+        let keybindings = MacKeyBindings::from_settings(&settings.keybindings);
         Self {
             engine: InputMethodEngine::with_config(config),
+            keybindings,
             settings: Some(settings),
             initialized: false,
         }
@@ -89,7 +96,7 @@ impl ImServer {
                 let params: ProcessKeyParams = parse_params(params)?;
                 let event =
                     KeyEvent::new(Keysym(params.keysym), params.modifiers, !params.is_release);
-                let result = self.engine.process_key(&event);
+                let result = self.process_key(&event);
                 self.key_result(result)
             }
             "select_candidate" => {
@@ -139,6 +146,22 @@ impl ImServer {
                 format!("method not found: {other}"),
             )),
         }
+    }
+
+    fn process_key(&mut self, event: &KeyEvent) -> EngineResult {
+        if let Some(action) = self.keybindings.action_for(event) {
+            return match action {
+                SemanticAction::ToHiragana => self.engine.transform_preedit(KanaScript::Hiragana),
+                SemanticAction::ToKatakana => self.engine.transform_preedit(KanaScript::Katakana),
+            };
+        }
+
+        // Command shortcuts not configured for Karukan must reach the app and
+        // must never be interpreted as normal composing input by the engine.
+        if event.modifiers.super_key {
+            return EngineResult::not_consumed();
+        }
+        self.engine.process_key(event)
     }
 
     fn handle_init(&mut self) -> Result<Value, RpcError> {

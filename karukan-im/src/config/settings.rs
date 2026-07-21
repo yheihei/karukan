@@ -21,6 +21,8 @@ pub struct Settings {
     pub conversion: ConversionSettings,
     /// Learning cache settings
     pub learning: LearningSettings,
+    /// macOS frontend key bindings
+    pub keybindings: KeyBindingSettings,
 }
 
 /// Conversion strategy mode
@@ -83,6 +85,15 @@ pub struct LearningSettings {
     /// cache; longer conversion results (e.g. whole live-converted
     /// sentences) are not learned
     pub max_surface_chars: usize,
+}
+
+/// Semantic key bindings handled by the macOS stdio server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyBindingSettings {
+    /// Convert the current preedit to full-width hiragana.
+    pub to_hiragana: String,
+    /// Convert the current preedit to full-width katakana.
+    pub to_katakana: String,
 }
 
 impl Default for Settings {
@@ -214,6 +225,8 @@ mod tests {
         assert!(settings.learning.enabled);
         assert_eq!(settings.learning.max_entries, 10000);
         assert_eq!(settings.learning.max_surface_chars, 50);
+        assert_eq!(settings.keybindings.to_hiragana, "control+j");
+        assert_eq!(settings.keybindings.to_katakana, "control+k");
     }
 
     #[test]
@@ -292,6 +305,22 @@ num_candidates = 3
         // Should use default for unspecified values
         assert!(settings.conversion.use_context);
         assert_eq!(settings.conversion.max_context_length, 10);
+        assert_eq!(settings.keybindings.to_hiragana, "control+j");
+    }
+
+    #[test]
+    fn test_custom_keybindings() {
+        let settings = parse_with_defaults(
+            r#"
+[keybindings]
+to_hiragana = "control+shift+j"
+to_katakana = "none"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.keybindings.to_hiragana, "control+shift+j");
+        assert_eq!(settings.keybindings.to_katakana, "none");
     }
 
     #[test]

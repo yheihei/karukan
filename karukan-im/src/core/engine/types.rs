@@ -245,6 +245,13 @@ impl ModeState {
     }
 }
 
+/// One-shot script conversion for the current preedit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KanaScript {
+    Hiragana,
+    Katakana,
+}
+
 /// One internal chunk of the composing buffer (at most
 /// `EngineConfig::composing_chunk_len` reading chars) together with its cached
 /// model conversion.

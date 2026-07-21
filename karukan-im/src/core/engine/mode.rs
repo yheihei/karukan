@@ -5,6 +5,37 @@ use tracing::debug;
 use super::*;
 
 impl InputMethodEngine {
+    /// Convert only the current preedit to the requested kana script.
+    pub(crate) fn transform_preedit(&mut self, script: KanaScript) -> EngineResult {
+        let start = std::time::Instant::now();
+        self.metrics.conversion_ms = 0;
+
+        if matches!(self.state, InputState::Empty) {
+            self.metrics.process_key_ms = start.elapsed().as_millis() as u64;
+            return EngineResult::not_consumed();
+        }
+
+        self.flush_romaji_to_composed();
+        self.input_buf.text = match script {
+            KanaScript::Hiragana => karukan_engine::katakana_to_hiragana(&self.input_buf.text),
+            KanaScript::Katakana => karukan_engine::hiragana_to_katakana(&self.input_buf.text),
+        };
+
+        // This is a one-shot conversion. New input in the same preedit resumes
+        // normal hiragana input instead of inheriting the converted script.
+        self.mode.set(InputMode::Hiragana);
+        self.live.text.clear();
+        self.chunks.clear();
+
+        let preedit = self.set_composing_state();
+        let result = EngineResult::consumed()
+            .with_action(EngineAction::UpdatePreedit(preedit))
+            .with_action(EngineAction::HideCandidates)
+            .with_action(EngineAction::UpdateAuxText(self.format_aux_composing()));
+        self.metrics.process_key_ms = start.elapsed().as_millis() as u64;
+        result
+    }
+
     /// Enter katakana mode (Ctrl+k)
     /// One-way switch to Katakana; a mode toggle key (Right Super, JIS 変換,
     /// macOS かな/right-⌘ tap) returns to Hiragana.

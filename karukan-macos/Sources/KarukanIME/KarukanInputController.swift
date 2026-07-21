@@ -52,8 +52,6 @@ class KarukanInputController: IMKInputController {
         rightCommandTap.cancel()
 
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        // Never swallow Command shortcuts.
-        if flags.contains(.command) { return false }
 
         // JIS かな key (and Karabiner right-Command tap → かな): always
         // consume so the system doesn't process keyCode 104 after the engine
@@ -79,7 +77,7 @@ class KarukanInputController: IMKInputController {
         // (0xff00 range): they can't start a composition, and the three
         // synchronous client IPCs in sendSurroundingText would otherwise
         // fire on every arrow-key repeat.
-        if !hasPreedit && key.keysym < 0xff00 {
+        if !hasPreedit && key.keysym < 0xff00 && !flags.contains(.command) {
             sendSurroundingText(client: client)
         }
 
