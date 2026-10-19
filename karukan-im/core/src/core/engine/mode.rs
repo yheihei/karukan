@@ -34,7 +34,7 @@ impl InputMethodEngine {
             .with_action(EngineAction::HideCandidates)
             .with_action(EngineAction::UpdateAuxText(self.format_aux_composing()));
         self.metrics.process_key_ms = start.elapsed().as_millis() as u64;
-        result
+        self.hide_candidate_window(result)
     }
 
     /// Enter katakana mode (Ctrl+k)
@@ -110,13 +110,7 @@ impl InputMethodEngine {
                 reading,
                 candidates,
                 ..
-            } => {
-                let shown = candidates
-                    .selected()
-                    .and_then(|c| c.reading.clone())
-                    .unwrap_or_else(|| reading.clone());
-                self.format_aux_conversion_with_page(&shown, Some(candidates))
-            }
+            } => self.format_aux_conversion(reading, candidates),
             InputState::Composing { .. } => self.format_aux_suggest(),
             InputState::Empty => format!("詳細表示: {mode}"),
         };

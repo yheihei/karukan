@@ -183,6 +183,36 @@ fn default_control_j_transforms_katakana_to_hiragana() {
 }
 
 #[test]
+fn script_conversion_respects_conversion_only_candidate_window() {
+    use crate::config::settings::CandidateWindow;
+
+    for (keysym, expected) in [(XKB_KEY_J, "あい"), (XKB_KEY_K, "アイ")] {
+        for converting in [false, true] {
+            let mut settings = Settings::default();
+            settings.conversion.live_conversion = false;
+            settings.display.candidate_window = CandidateWindow::Conversion;
+            let mut server = ImServer::with_settings(settings);
+            press(&mut server, XKB_KEY_A);
+            press(&mut server, XKB_KEY_I);
+            if converting {
+                press(&mut server, XKB_KEY_SPACE);
+            }
+
+            let resp = press_with_modifiers(&mut server, keysym, json!({"control":true}));
+
+            assert_eq!(resp["result"]["consumed"], true);
+            assert_eq!(
+                actions_of(&resp, "update_preedit").last().unwrap()["text"],
+                expected
+            );
+            assert!(actions_of(&resp, "show_candidates").is_empty());
+            assert!(actions_of(&resp, "update_aux").is_empty());
+            assert_eq!(actions_of(&resp, "hide_aux").len(), 1);
+        }
+    }
+}
+
+#[test]
 fn control_binding_passes_through_when_preedit_is_empty() {
     let mut server = test_server();
 

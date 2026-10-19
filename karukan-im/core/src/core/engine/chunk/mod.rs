@@ -142,8 +142,18 @@ impl InputMethodEngine {
     /// The left context (lctx) a chunk is built with: `base` (editor
     /// surrounding text) + preceding converted text, truncated to the API
     /// budget. Defined once so conversion and the aux display can't drift.
+    ///
+    /// A whitespace-only result (a lone Shift+Space chunk ahead of the
+    /// caret, or a truncation that kept only trailing blanks) is dropped to
+    /// empty: blanks are noise to the model and would only split the cache
+    /// between `""` and `"　"`.
     pub(super) fn lctx_for(&self, base: &str, preceding_converted: &str) -> String {
-        self.truncate_context(&format!("{base}{preceding_converted}"))
+        let lctx = self.truncate_context(&format!("{base}{preceding_converted}"));
+        if lctx.trim().is_empty() {
+            String::new()
+        } else {
+            lctx
+        }
     }
 
     /// Left context for the chunk at `index`, derived on demand from the
@@ -216,6 +226,17 @@ impl InputMethodEngine {
     /// `chunks.len()` — one past the end — because the new chunk is still
     /// empty. 0 for an empty buffer or a cursor at the very start.
     pub(super) fn current_chunk_index(&self) -> usize {
+        let lengths: Vec<usize> = self
+            .chunks
+            .iter()
+            .map(|c| c.reading.chars().count())
+            .collect();
+        self.caret_chunk_index(&lengths)
+    }
+
+    /// The walk itself, over the chunk lengths in order, so the grid and a
+    /// fresh split answer the question the same way.
+    fn caret_chunk_index(&self, lengths: &[usize]) -> usize {
         let cursor = self.input_buf.reading_cursor();
         let at_break = self.chunk_breaks.contains(&cursor);
         let pos = if at_break {
@@ -224,30 +245,33 @@ impl InputMethodEngine {
             cursor.saturating_sub(1)
         };
         let mut end = 0;
-        for (i, chunk) in self.chunks.iter().enumerate() {
-            end += chunk.reading.chars().count();
+        for (i, len) in lengths.iter().enumerate() {
+            end += len;
             if pos < end {
                 return i;
             }
         }
         if at_break {
-            self.chunks.len()
+            lengths.len()
         } else {
-            self.chunks.len().saturating_sub(1)
+            lengths.len().saturating_sub(1)
         }
     }
 
-    /// Reading of the chunk the caret currently types into — `Some("")`
-    /// while [`Self::current_chunk_index`] points one past the end (a break
-    /// armed at the end of the reading, whose chunk does not exist yet),
-    /// `None` when the buffer has no chunks at all. Keeps the sentinel
-    /// interpretation next to where it is produced.
-    pub(super) fn current_chunk_reading(&self) -> Option<&str> {
-        match self.chunks.get(self.current_chunk_index()) {
-            Some(chunk) => Some(&chunk.reading),
-            None if !self.chunks.is_empty() => Some(""),
-            None => None,
-        }
+    /// The caret's chunk read off a fresh split of the buffer, so it stands
+    /// whatever state the grid is in: typing inside a filtered view
+    /// suppresses the suggestion, which clears `self.chunks`, and the aux
+    /// counter has to survive that. Empty while the caret is past the last
+    /// chunk (a break armed at the end of the reading), which restarts the
+    /// counter at 0 as the composing line does.
+    pub(super) fn caret_chunk_reading(&self) -> String {
+        let chars: Vec<char> = self.input_buf.reading().chars().collect();
+        let groups = self.split_chunks(&chars);
+        let lengths: Vec<usize> = groups.iter().map(|g| g.chars().count()).collect();
+        groups
+            .get(self.caret_chunk_index(&lengths))
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Debug-log the current chunking; `at` labels the call site

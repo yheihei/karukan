@@ -44,7 +44,7 @@ impl Default for ImServer {
 impl ImServer {
     /// Create a server with settings loaded from config.toml (or defaults).
     pub fn new() -> Self {
-        let settings = Settings::load().unwrap_or_default();
+        let settings = Settings::load_or_default();
         Self::with_settings(settings)
     }
 
@@ -169,7 +169,7 @@ impl ImServer {
             let settings = self
                 .settings
                 .take()
-                .unwrap_or_else(|| Settings::load().unwrap_or_default());
+                .unwrap_or_else(Settings::load_or_default);
             if let Err(e) = self.engine.init_from_settings(&settings) {
                 // Keep the settings so a retried `init` uses the same ones.
                 self.settings = Some(settings);
